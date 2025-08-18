@@ -7,11 +7,11 @@ class MetasploitModule < Msf::Auxiliary
 
   def initialize(info = {})
     super(update_info(info,
-      'Name'        => 'ESC/POS Network Printer Discovery (Thread-Safe, Clean Output)',
+      'Name'        => 'ESC/POS Network Printer Discovery (Guaranteed Output)',
       'Description' => %q{
-        Identifies network printers likely ESC/POS-compatible (Epson TM series, Star Micronics, BIXOLON)
-        by checking TCP/9100 and optionally sending a safe ESC/POS status query.
-        Gives per-host status updates (if VERBOSE), collects likely printer IPs, and prints them all at the end.
+        Identifies network printers likely ESC/POS-compatible by checking TCP/9100
+        and optionally sending a safe ESC/POS status query.
+        Prints IPs immediately when discovered (thread-safe).
       },
       'Author'      => ['FutileSkills'],
       'License'     => MSF_LICENSE
@@ -25,10 +25,6 @@ class MetasploitModule < Msf::Auxiliary
         OptBool.new('ACTIVE_CHECK', [true, 'Send safe ESC/POS status (DLE EOT 1)', true]),
       ]
     )
-
-    # Thread-safe storage for found IPs
-    @@found_printers ||= []
-    @@found_printers_mutex ||= Mutex.new
   end
 
   DLE_EOT1 = "\x10\x04\x01".b
@@ -45,7 +41,7 @@ class MetasploitModule < Msf::Auxiliary
         resp = sock.get_once(datastore['TIMEOUT'].to_i / 1000.0)
         likely = true if resp && !resp.empty?
       else
-        likely = true  # TCP/9100 open is enough
+        likely = true
       end
     rescue ::Rex::ConnectionError
       vprint_status("#{ip}:#{rport} TCP closed")
@@ -55,20 +51,8 @@ class MetasploitModule < Msf::Auxiliary
     end
 
     if likely
-      @@found_printers_mutex.synchronize do
-        @@found_printers << ip
-      end
-    end
-  end
-
-  # Called automatically after all hosts have been scanned
-  def run_completed
-    return if @@found_printers.empty?
-
-    print_good("\n=== Likely ESC/POS Printers Found ===")
-    @@found_printers.uniq.sort.each do |ip|
+      # Print immediately — guaranteed thread-safe
       puts "[ESC/POS] #{ip}"
     end
-    print_good("=== End of Scan ===\n")
   end
 end
