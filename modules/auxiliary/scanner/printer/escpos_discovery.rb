@@ -8,11 +8,11 @@ class MetasploitModule < Msf::Auxiliary
 
   def initialize(info = {})
     super(update_info(info,
-      'Name'        => 'ESC/POS Network Printer Discovery (Clean Output)',
+      'Name'        => 'ESC/POS Network Printer Discovery (Buffered Output)',
       'Description' => %q{
         Identifies network printers likely ESC/POS-compatible (Epson TM series, Star Micronics, BIXOLON)
         by checking TCP/9100 and optionally sending a safe ESC/POS status query.
-        Only prints IPs that are likely printers.
+        Collects likely printer IPs and prints them all at the end.
       },
       'Author'      => ['FutileSkills'],
       'License'     => MSF_LICENSE
@@ -26,6 +26,9 @@ class MetasploitModule < Msf::Auxiliary
         OptBool.new('ACTIVE_CHECK', [true, 'Send safe ESC/POS status (DLE EOT 1)', true]),
       ]
     )
+
+    # Array to store likely printer IPs
+    @found_printers = []
   end
 
   DLE_EOT1 = "\x10\x04\x01".b
@@ -41,8 +44,7 @@ class MetasploitModule < Msf::Auxiliary
         resp = sock.get_once(datastore['TIMEOUT'].to_i / 1000.0)
         likely = true if resp && !resp.empty?
       else
-        # if TCP/9100 open and no active check, consider as possible printer
-        likely = true
+        likely = true  # TCP/9100 open is enough
       end
     rescue ::Rex::ConnectionError
       likely = false
@@ -51,8 +53,10 @@ class MetasploitModule < Msf::Auxiliary
     end
 
     if likely
-      puts ip
-      # optional: report to Metasploit database
+      # Store the IP for printing later
+      @found_printers << ip
+
+      # Report to Metasploit database
       store_service(host: ip, port: rport, proto: 'tcp', name: 'printer-raw-9100')
       report_note(
         host: ip,
@@ -61,5 +65,17 @@ class MetasploitModule < Msf::Auxiliary
         update: true
       )
     end
+  end
+
+  # After all hosts have been scanned, print all likely printer IPs
+  def run
+    super
+    return if @found_printers.empty?
+
+    print_good("\n=== Likely ESC/POS Printers Found ===")
+    @found_printers.each do |ip|
+      puts "[ESC/POS] #{ip}"
+    end
+    print_good("=== End of Scan ===\n")
   end
 end
