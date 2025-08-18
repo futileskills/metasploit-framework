@@ -27,7 +27,6 @@ class MetasploitModule < Msf::Auxiliary
       ]
     )
 
-    # Array to store likely printer IPs
     @found_printers = []
   end
 
@@ -53,7 +52,6 @@ class MetasploitModule < Msf::Auxiliary
     end
 
     if likely
-      # Store the IP for printing later
       @found_printers << ip
 
       # Report to Metasploit database
@@ -67,13 +65,12 @@ class MetasploitModule < Msf::Auxiliary
     end
   end
 
-  # After all hosts have been scanned, print all likely printer IPs
-  def run
-    super
+  # This is called automatically by the scanner mixin after all hosts are scanned
+  def run_completed
     return if @found_printers.empty?
 
     print_good("\n=== Likely ESC/POS Printers Found ===")
-    @found_printers.each do |ip|
+    @found_printers.uniq.each do |ip|
       puts "[ESC/POS] #{ip}"
     end
     print_good("=== End of Scan ===\n")
