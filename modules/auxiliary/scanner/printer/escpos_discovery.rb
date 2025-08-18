@@ -8,11 +8,11 @@ class MetasploitModule < Msf::Auxiliary
 
   def initialize(info = {})
     super(update_info(info,
-      'Name'        => 'ESC/POS Network Printer Discovery (Nmap-based)',
+      'Name'        => 'ESC/POS Network Printer Discovery (Clean Output)',
       'Description' => %q{
-        Identifies network printers likely ESC/POS-compatible (e.g., Epson TM series,
-        Star Micronics, BIXOLON). Uses a TCP 9100 scan and optionally sends a safe
-        ESC/POS status query. Results are recorded in the Metasploit database.
+        Identifies network printers likely ESC/POS-compatible (Epson TM series, Star Micronics, BIXOLON)
+        by checking TCP/9100 and optionally sending a safe ESC/POS status query.
+        Only prints IPs that are likely printers.
       },
       'Author'      => ['FutileSkills'],
       'License'     => MSF_LICENSE
@@ -31,38 +31,35 @@ class MetasploitModule < Msf::Auxiliary
   DLE_EOT1 = "\x10\x04\x01".b
 
   def run_host(ip)
+    likely = false
+
     begin
       connect(true)
-      print_status("#{ip}:#{rport} TCP open")
-      escpos_resp = nil
-
       if datastore['ACTIVE_CHECK']
         sock.put(DLE_EOT1)
         sock.flush
-        escpos_resp = sock.get_once(datastore['TIMEOUT'].to_i / 1000.0)
-        escpos_resp = escpos_resp.bytes.map { |b| sprintf('0x%02X', b) }.join(' ') if escpos_resp
+        resp = sock.get_once(datastore['TIMEOUT'].to_i / 1000.0)
+        likely = true if resp && !resp.empty?
+      else
+        # if TCP/9100 open and no active check, consider as possible printer
+        likely = true
       end
+    rescue ::Rex::ConnectionError
+      likely = false
+    ensure
+      disconnect rescue nil
+    end
 
-      likely = escpos_resp || true # just open TCP/9100 is a hint
-      if likely
-        print_good("#{ip}: Likely ESC/POS printer (tcp/9100 open; escpos_resp=#{escpos_resp || 'none'})")
-      end
-
+    if likely
+      puts ip
+      # optional: report to Metasploit database
       store_service(host: ip, port: rport, proto: 'tcp', name: 'printer-raw-9100')
       report_note(
         host: ip,
         type: 'printer.escpos.discovery',
-        data: {
-          escpos_candidate: likely,
-          tcp_9100_open: true,
-          escpos_status_bytes: escpos_resp
-        },
+        data: { escpos_candidate: true },
         update: true
       )
-    rescue ::Rex::ConnectionError
-      vprint_status("#{ip}:#{rport} TCP closed")
-    ensure
-      disconnect rescue nil
     end
   end
 end
