@@ -7,7 +7,7 @@ class MetasploitModule < Msf::Auxiliary
 
   def initialize(info = {})
     super(update_info(info,
-      'Name'        => 'ESC/POS Network Printer Discovery (Guaranteed Output)',
+      'Name'        => 'ESC/POS Network Printer Discovery',
       'Description' => %q{
         Identifies network printers likely ESC/POS-compatible by checking TCP/9100
         and optionally sending a safe ESC/POS status query.
